@@ -70,7 +70,7 @@ const CSS = `
 .ph-iconbtn__dot { position: absolute; top: 4%; right: 4%; width: 26%; height: 26%; border-radius: 50%; background: var(--ph-coral); border: 2px solid #fff; }
 
 /* --------------------------------------------------------- top-right block */
-.ph-corner { position: fixed; top: var(--ph-top); right: var(--ph-right); display: flex; flex-direction: column; align-items: flex-end; gap: ${S(8, 5)}; }
+.ph-corner { position: fixed; top: calc(var(--ph-top) + ${S(56, 40)}); right: var(--ph-right); display: flex; flex-direction: column; align-items: flex-end; gap: ${S(8, 5)}; }
 .ph-minimap { position: relative; width: ${S(200, 112)}; height: ${S(200, 112)}; border-radius: 50%; overflow: hidden; border: ${S(4, 3)} solid #ffb3c1; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); background: #6fb6dd; cursor: pointer; }
 .ph-minimap canvas { width: 100%; height: 100%; display: block; }
 .ph-minimap__north { position: absolute; width: ${S(22, 16)}; height: ${S(22, 16)}; border-radius: 50%; background: #10131c; color: #fff; font-size: ${S(12, 9)}; font-weight: 700; display: grid; place-items: center; transform: translate(-50%, -50%); }
