@@ -1,0 +1,41 @@
+{
+  "name": "palmhaven-city-life-rp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Palmhaven City Life RP - an open-world tropical city-life roleplay game for Bloxity (Three.js + Colyseus)",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @palmhaven/shared",
+    "dev": "npm run build:shared && concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm run dev --workspace @palmhaven/server",
+    "dev:client": "npm run dev --workspace @palmhaven/client",
+    "build": "npm run build:shared && npm run build --workspace @palmhaven/server && npm run build --workspace @palmhaven/client",
+    "build:client": "npm run build:shared && npm run build --workspace @palmhaven/client",
+    "build:server": "npm run build:shared && npm run build --workspace @palmhaven/server",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "start": "npm run start --workspace @palmhaven/server",
+    "verify:city": "npm run build:shared && node scripts/verify-city.mjs",
+    "verify:sim": "npm run build:shared && node scripts/verify-sim.mjs",
+    "verify:assets": "node scripts/verify-assets.mjs",
+    "verify": "npm run verify:city && npm run verify:sim && npm run verify:assets",
+    "verify:multiplayer": "node scripts/verify-multiplayer.mjs",
+    "verify:capacity": "node scripts/verify-capacity.mjs",
+    "verify:persistence": "npm run build:server && node scripts/verify-persistence.mjs",
+    "size:client": "node scripts/build-size.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@colyseus/core": "0.16.24"
+  }
+}
