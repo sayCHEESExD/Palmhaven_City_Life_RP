@@ -212,6 +212,13 @@ export class LocalPlayer {
       this.motion.vy = 0;
       this.motion.grounded = true;
       this.motion.swimming = false;
+      // No prediction runs while carried, so there is nothing to interpolate
+      // from: a stale "previous" (where they stood before sitting) would drag
+      // the body - and the camera - back and forth every frame.
+      this.previous.x = state.x;
+      this.previous.y = state.y;
+      this.previous.z = state.z;
+      this.correction.set(0, 0, 0);
       return;
     }
 
@@ -341,6 +348,12 @@ export class LocalPlayer {
       v.speed = Math.hypot(b.vx, b.vz);
       this.position.set(v.x, v.y, v.z);
       this.velocity.set(b.vx, b.vy, b.vz);
+      return;
+    }
+    if (this.mode === 'carried') {
+      // Server-placed (a seat, a bed, a passenger seat, cuffs): exactly where it says.
+      this.position.set(this.motion.x, this.motion.y, this.motion.z);
+      this.velocity.set(0, 0, 0);
       return;
     }
     this.position.set(
