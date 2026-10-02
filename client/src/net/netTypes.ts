@@ -62,6 +62,7 @@ export interface NetVehicleState {
   grounded: boolean;
   nitro: number;
   throttle: number;
+  steer: number;
   flags: number;
   fuel: number;
   fare: number;

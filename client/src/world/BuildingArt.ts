@@ -69,6 +69,34 @@ class Frame {
   part(p: PartBuilder, w: number, h: number, d: number, color: number, x: number, y: number, z: number, kind: PartKind = 'smooth', ry = 0): void {
     p.add(new BoxGeometry(w, h, d), color, kind, this.t(x, y, z, ry));
   }
+
+  /**
+   * A band wrapped round the whole building (a stripe, a trim course, a
+   * plinth). Solid when nobody can go inside; on an ENTERABLE building it is a
+   * hollow ring sunk into the walls, so it never shows up as a slab floating
+   * through the room inside.
+   */
+  band(p: PartBuilder, w: number, h: number, d: number, color: number, y: number, kind: PartKind = 'smooth'): void {
+    if (this.b.interior === null) {
+      this.part(p, w, h, d, color, 0, y, 0, kind);
+      return;
+    }
+    const t = Math.min(0.7, (w - this.b.w) / 2 + WALL * 0.6);
+    // The front run stops at each doorway it would otherwise cross.
+    let cursor = -w / 2;
+    const doors = doorsOf(this.b.interior, this.b.w)
+      .filter((door) => y - h / 2 < door.height + 0.4)
+      .sort((m, n) => m.offset - n.offset);
+    for (const door of doors) {
+      const left = door.offset - door.width / 2 - 0.3;
+      if (left - cursor > 0.05) this.part(p, left - cursor, h, t, color, (left + cursor) / 2, y, d / 2 - t / 2, kind);
+      cursor = Math.max(cursor, door.offset + door.width / 2 + 0.3);
+    }
+    if (w / 2 - cursor > 0.05) this.part(p, w / 2 - cursor, h, t, color, (w / 2 + cursor) / 2, y, d / 2 - t / 2, kind);
+    this.part(p, w, h, t, color, 0, y, -d / 2 + t / 2, kind);
+    this.part(p, t, h, d - t * 2, color, w / 2 - t / 2, y, 0, kind);
+    this.part(p, t, h, d - t * 2, color, -w / 2 + t / 2, y, 0, kind);
+  }
 }
 
 // ---------------------------------------------------------------- entry
@@ -183,7 +211,7 @@ const mass = (f: Frame, kit: BuildKit): void => {
     }
     const stripeY = [4.45, h * 0.62];
     for (const y of stripeY) {
-      f.part(kit.parts, b.w + 0.12, 0.55, b.d + 0.12, s.trim, 0, y, 0);
+      f.band(kit.parts, b.w + 0.12, 0.55, b.d + 0.12, s.trim, y);
     }
   }
 
@@ -260,11 +288,13 @@ const mass = (f: Frame, kit: BuildKit): void => {
     // A red cross over the entrance and an ambulance canopy.
     f.part(kit.parts, 1.2, 4, 0.4, 0xff3b4c, -12, h - 4, hd + 0.3, 'glow');
     f.part(kit.parts, 4, 1.2, 0.4, 0xff3b4c, -12, h - 4, hd + 0.3, 'glow');
-    f.part(kit.parts, 18, 0.6, 7, 0xf2f2f2, 0, 6.2, hd + 3.5);
-    for (const x of [-8, 8]) cylinder(kit.parts, 0.35, 0.35, 6, 0xdddddd, f.t(x, 3, hd + 6.4), 'smooth', 8);
+    // The canopy shelters the ambulance bay BESIDE the entrance, never over the
+    // door: a roof there would hide anyone walking in from the camera behind them.
+    f.part(kit.parts, 16, 0.6, 7, 0xf2f2f2, -24, 6.2, hd + 3.5);
+    for (const x of [-31, -17]) cylinder(kit.parts, 0.35, 0.35, 6, 0xdddddd, f.t(x, 3, hd + 6.4), 'smooth', 8);
   }
   if (b.interior === 'police') {
-    f.part(kit.parts, b.w + 0.2, 1.2, b.d + 0.2, 0x2d5bd6, 0, 8.2, 0);
+    f.band(kit.parts, b.w + 0.2, 1.2, b.d + 0.2, 0x2d5bd6, 8.2);
     f.part(kit.parts, 14, 0.5, 4, 0x23395d, 0, 7.8, hd + 2);
   }
   if (b.interior === 'fire') {
@@ -362,7 +392,7 @@ const house = (f: Frame, kit: BuildKit): void => {
   const enterable = b.interior !== null;
   // Ground floor walls (hollow when enterable), then a second storey for tall houses.
   walls(f, kit, PATTERN.house, b.h);
-  f.part(kit.parts, b.w + 0.4, 0.5, b.d + 0.4, shade(s.wall, 0.8), 0, 0.25, 0);
+  f.band(kit.parts, b.w + 0.4, 0.5, b.d + 0.4, shade(s.wall, 0.8), 0.25);
   if (s.roofKind === 'gable' || s.roofKind === 'hip') {
     const rise = Math.min(b.w, b.d) * 0.36;
     const eave = 1.2;

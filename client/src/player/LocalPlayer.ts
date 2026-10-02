@@ -268,6 +268,7 @@ export class LocalPlayer {
     m.grounded = v.grounded;
     m.nitro = v.nitro;
     m.throttle = v.throttle;
+    m.steer = v.steer ?? 0;
   }
 
   /** Other vehicles' bodies, refreshed by the game every frame. */

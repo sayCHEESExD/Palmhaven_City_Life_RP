@@ -21,6 +21,8 @@ export class VehicleState extends Schema {
   @type('boolean') grounded = true;
   @type('float32') nitro = 1;
   @type('float32') throttle = 0;
+  /** The wheel's eased position, so a driver's prediction replays from the same place. */
+  @type('float32') steer = 0;
 
   /** 1 lights, 2 siren, 4 locked. */
   @type('uint8') flags = 0;

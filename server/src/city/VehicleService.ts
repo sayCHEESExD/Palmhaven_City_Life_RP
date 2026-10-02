@@ -419,6 +419,7 @@ export class VehicleService {
     s.grounded = m.grounded;
     s.nitro = m.nitro;
     s.throttle = m.throttle;
+    s.steer = m.steer;
     this.circlesStale = true;
   }
 

@@ -40,6 +40,12 @@ export class WorldCollision {
   private readonly groupKeys = new Map<string, string>();
   private readonly free: number[] = [];
   private readonly ramps: readonly Ramp[];
+  /**
+   * While > 0, solids whose footprint is no wider than this on BOTH axes are
+   * ignored - set by the vehicle step, so a car is never snagged by a palm
+   * trunk, lamp post, hydrant or signal pole at the kerb. Walkers still collide.
+   */
+  ignoreThinner = 0;
   /** Who is moving right now: their exemptions apply. */
   mover = '';
 
@@ -135,6 +141,7 @@ export class WorldCollision {
           const b = this.solids[index];
           if (!b) continue;
           if (b.maxX <= minX || b.minX >= maxX || b.maxZ <= minZ || b.minZ >= maxZ) continue;
+          if (this.ignoreThinner > 0 && b.maxX - b.minX <= this.ignoreThinner && b.maxZ - b.minZ <= this.ignoreThinner) continue;
           if (this.isExempt(index)) continue;
           out.push(index);
         }

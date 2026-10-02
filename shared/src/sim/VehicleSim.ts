@@ -32,6 +32,8 @@ export interface VehicleMotion {
   nitro: number;
   /** Plane throttle 0..1. */
   throttle: number;
+  /** The wheel's actual position -1..1: it eases toward the stick, never snaps. */
+  steer: number;
 }
 
 export interface VehicleParams {
@@ -49,7 +51,7 @@ export interface VehicleEvents {
   travelled: number;
 }
 
-export const createVehicleMotion = (x = 0, y = 0, z = 0, yaw = 0): VehicleMotion => ({ x, y, z, yaw, vx: 0, vz: 0, vy: 0, grounded: true, nitro: 1, throttle: 0 });
+export const createVehicleMotion = (x = 0, y = 0, z = 0, yaw = 0): VehicleMotion => ({ x, y, z, yaw, vx: 0, vz: 0, vy: 0, grounded: true, nitro: 1, throttle: 0, steer: 0 });
 export const createVehicleEvents = (): VehicleEvents => ({ crash: 0, landed: false, travelled: 0 });
 
 export const copyVehicleMotion = (from: VehicleMotion, to: VehicleMotion): void => {
@@ -63,6 +65,7 @@ export const copyVehicleMotion = (from: VehicleMotion, to: VehicleMotion): void 
   to.grounded = from.grounded;
   to.nitro = from.nitro;
   to.throttle = from.throttle;
+  to.steer = from.steer;
 };
 
 /** Forward speed (signed). */
@@ -135,7 +138,29 @@ const stepHeightOf = (def: VehicleDef, grounded: boolean): number => {
 /**
  * Advance one vehicle by one step.
  */
+/** Street furniture this thin (palm trunks, lamps, poles, hydrants, bins) never stops a vehicle. */
+export const VEHICLE_IGNORES_THINNER = 1.65;
+
 export const stepVehicle = (
+  m: VehicleMotion,
+  input: MovementInput,
+  def: VehicleDef,
+  params: VehicleParams,
+  delta: number,
+  collision: WorldCollision,
+  obstacles: readonly Obstacle[],
+  events: VehicleEvents,
+): void => {
+  const before = collision.ignoreThinner;
+  collision.ignoreThinner = def.class === 'heli' || def.class === 'plane' ? before : VEHICLE_IGNORES_THINNER;
+  try {
+    stepVehicleBody(m, input, def, params, delta, collision, obstacles, events);
+  } finally {
+    collision.ignoreThinner = before;
+  }
+};
+
+const stepVehicleBody = (
   m: VehicleMotion,
   input: MovementInput,
   def: VehicleDef,
@@ -160,7 +185,13 @@ export const stepVehicle = (
   let vf = m.vx * fx + m.vz * fz;
   let vs = m.vx * rx + m.vz * rz;
   const throttle = clamp(input.moveZ, -1, 1);
-  const steer = clamp(input.moveX, -1, 1);
+  // The wheel turns toward the stick at a finite rate and returns to centre a
+  // little faster: a keyboard tap becomes a smooth arc instead of a jolt.
+  const wanted = clamp(input.moveX, -1, 1);
+  const centring = Math.abs(wanted) < Math.abs(m.steer) || wanted * m.steer < 0;
+  m.steer = approach(Number.isFinite(m.steer) ? m.steer : 0, wanted, (centring ? 6 : 3.6) * Math.min(dt, 0.1));
+  const steer = def.class === 'plane' || def.class === 'heli' ? wanted : m.steer;
+  const yawBefore = m.yaw;
 
   if (def.class === 'heli') {
     stepHeli(m, input, def, hasFuel, dt);
@@ -232,6 +263,16 @@ export const stepVehicle = (
 
   // ------------------------------------------------------------- movement
   const r = vehicleRadius(def);
+  if (m.yaw !== yawBefore && def.class !== 'heli' && !bodyFits(def, collision, m.x, m.y, m.z, m.yaw, stepHeightOf(def, m.grounded))) {
+    // The turn would put the nose or tail into something: keep the old heading,
+    // so a car brushed against a wall can always steer or drive away from it.
+    m.yaw = yawBefore;
+    const nfx = Math.sin(m.yaw);
+    const nfz = Math.cos(m.yaw);
+    const along = m.vx * nfx + m.vz * nfz;
+    m.vx = nfx * along;
+    m.vz = nfz * along;
+  }
   const speedNow = Math.hypot(m.vx, m.vz, m.vy);
   const steps = Math.min(30, Math.max(1, Math.ceil((speedNow * dt) / 0.6)));
   const sh = dt / steps;
@@ -243,29 +284,47 @@ export const stepVehicle = (
     const ox = m.x;
     const oy = m.y;
     const oz = m.z;
+    // Already overlapping (a correction, a spawn at the edge): let it move out
+    // rather than refusing every move from an invalid start. The centre still
+    // collides (moveAxis), so this never lets it drive further INTO a wall.
+    const startsWedged = !bodyFits(def, collision, m.x, m.y, m.z, m.yaw, step);
+    // Each axis on its own, so a car meeting a wall at an angle SLIDES along it:
+    // only the blocked component of its velocity is lost, never the whole car.
     collision.moveAxis('x', m.x, m.y, m.z, m.vx * sh, r * 0.92, def.height, step, AXIS);
-    const hitX = AXIS.hit;
-    m.x = AXIS.value;
-    m.y = AXIS.y;
+    let hitX = AXIS.hit;
+    const tryX = AXIS.value;
+    const tryXY = AXIS.y;
+    if (startsWedged || bodyFits(def, collision, tryX, tryXY, m.z, m.yaw, step)) {
+      m.x = tryX;
+      m.y = tryXY;
+    } else hitX = true;
     collision.moveAxis('z', m.x, m.y, m.z, m.vz * sh, r * 0.92, def.height, step, AXIS);
-    const hitZ = AXIS.hit;
-    m.z = AXIS.value;
-    m.y = AXIS.y;
+    let hitZ = AXIS.hit;
+    if (startsWedged || bodyFits(def, collision, m.x, AXIS.y, AXIS.value, m.yaw, step)) {
+      m.z = AXIS.value;
+      m.y = AXIS.y;
+    } else hitZ = true;
     collision.clampToBounds(m, r);
 
-    if (hitX || hitZ || !bodyFits(def, collision, m.x, m.y, m.z, m.yaw, step)) {
-      // Back to where we were, and bounce off whatever we hit.
-      const impact = Math.hypot(m.vx, m.vz);
-      m.x = ox;
-      m.y = oy;
-      m.z = oz;
+    if (hitX || hitZ) {
+      const impactX = hitX ? Math.abs(m.vx) : 0;
+      const impactZ = hitZ ? Math.abs(m.vz) : 0;
+      const impact = Math.hypot(impactX, impactZ);
       events.crash = Math.max(events.crash, impact);
-      const along = m.vx * Math.sin(m.yaw) + m.vz * Math.cos(m.yaw);
-      const keep = -0.18;
-      m.vx = Math.sin(m.yaw) * along * keep;
-      m.vz = Math.cos(m.yaw) * along * keep;
+      // A soft rebound off the blocked axis; the other axis keeps its speed,
+      // trimmed a little by the scrape.
+      if (hitX) m.vx *= -0.15;
+      if (hitZ) m.vz *= -0.15;
+      const scrape = impact > 6 ? 0.9 : 0.97;
+      if (!hitX) m.vx *= scrape;
+      if (!hitZ) m.vz *= scrape;
       if (def.class === 'plane') m.throttle = Math.min(m.throttle, 0.2);
-      break;
+      if (hitX && hitZ) {
+        m.x = ox;
+        m.y = oy;
+        m.z = oz;
+        break;
+      }
     }
 
     // Vertical.

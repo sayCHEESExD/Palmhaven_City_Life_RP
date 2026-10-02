@@ -24,6 +24,7 @@ import {
   stepVehicle,
   vehicleByKey,
   vehicleObstacles,
+  VEHICLE_IGNORES_THINNER,
 } from '../shared/dist/index.js';
 
 let failures = 0;
@@ -47,10 +48,12 @@ const rng = (seed) => () => {
 const input = (over = {}) => ({ moveX: 0, moveZ: 0, jump: false, sprint: false, down: false, cameraYaw: 0, ...over });
 
 /** The deepest a circle of radius r sits inside any tall solid, 0 when clear. */
-const penetration = (x, y, z, r, height) => {
+const penetration = (x, y, z, r, height, thin = 0) => {
   let worst = 0;
   for (const b of data.solids) {
     if (b.maxY - b.minY < 1.5) continue;
+    // Vehicles pass thin street furniture by design (VEHICLE_IGNORES_THINNER).
+    if (thin > 0 && b.maxX - b.minX <= thin && b.maxZ - b.minZ <= thin) continue;
     // The body's core band: a head brushing a ceiling is not being in a wall.
     if (y + height * 0.75 <= b.minY || y + 0.4 >= b.maxY) continue;
     const dx = Math.max(b.minX - x, 0, x - b.maxX);
@@ -139,7 +142,7 @@ const drive = (key, x, y, z, yaw, seconds, pick, label) => {
     maxSpeed = Math.max(maxSpeed, Math.hypot(m.vx, m.vz));
     peak = Math.max(peak, m.y);
     if (def.class === 'boat' && isLand(m.x, m.z)) leftWater = true;
-    if (def.class !== 'heli' && def.class !== 'plane') worst = Math.max(worst, penetration(m.x, m.y, m.z, 0, def.height));
+    if (def.class !== 'heli' && def.class !== 'plane') worst = Math.max(worst, penetration(m.x, m.y, m.z, 0, def.height, VEHICLE_IGNORES_THINNER));
   }
   return { m, worst, distance, maxSpeed, peak, leftWater, def, label };
 };
